@@ -1,0 +1,159 @@
+# ---------------------------------------------------------------------------
+# Underwriting Fraud Decisioning Policy (config-driven, LOS-deployable)
+#
+# Each rule is evaluated against the application record at the fraud
+# decision step of the LOS (after credit pre-decision, before funding).
+#   action:  DECLINE  -> hard stop, adverse action w/ fraud reason
+#            REVIEW   -> route to manual fraud review queue (stipulations)
+#            STIP     -> auto-condition (e.g. require bank-link / POI) w/o human review
+#   strategy: champion = current production; challenger = proposed
+# Conditions use pandas.eval syntax over application columns. Missing values
+# evaluate False (a rule never fires on absent data).
+# ---------------------------------------------------------------------------
+version: "2026.11-v3"
+owner: "Director, Fraud Analytics, Risk & Strategy"
+approved_by: "Credit Risk Committee"
+effective_date: "2026-12-01"
+
+model_cutoffs:
+  # Calibrated ML fraud score (probability) thresholds -- challenger only
+  decline_at_or_above: 0.50   # set by cutoff optimisation (see reports/)
+  review_at_or_above: 0.15
+
+review_capacity:
+  analysts: 2
+  reviews_per_analyst_per_day: 17
+  working_days_per_month: 21
+  cost_per_review_usd: 38
+  sla_hours: 4
+
+rules:
+  # ---------------- Identity / application fraud -------------------------
+  - id: ID-001
+    name: SSN deceased / invalid / not issued
+    typology: application_fraud
+    condition: "ssn_deceased_or_invalid == 1"
+    action: DECLINE
+    strategies: [champion, challenger]
+
+  - id: ID-002
+    name: Bureau name/DOB mismatch + new phone
+    typology: application_fraud
+    condition: "bureau_name_dob_mismatch == 1 and phone_tenure_days < 90"
+    action: REVIEW
+    strategies: [champion, challenger]
+
+  - id: ID-003
+    name: Mail-drop / commercial address on primary residence
+    typology: application_fraud
+    condition: "address_type in ['mail_drop', 'commercial']"
+    action: REVIEW
+    strategies: [champion, challenger]
+
+  - id: ID-004
+    name: IP geolocation far from stated address
+    typology: application_fraud
+    condition: "ip_geo_mismatch_km > 800"
+    action: REVIEW
+    strategies: [challenger]
+
+  - id: ID-005
+    name: Vendor A identity verification high risk
+    typology: application_fraud
+    condition: "vendor_a_idv_risk >= 650"
+    action: REVIEW
+    strategies: [champion, challenger]
+
+  # ---------------- Synthetic identity -----------------------------------
+  - id: SYN-001
+    name: Vendor B synthetic score very high
+    typology: synthetic_identity
+    condition: "vendor_b_synth_score >= 800"
+    action: DECLINE
+    strategies: [challenger]
+
+  - id: SYN-002
+    name: Piggy-backed AU tradelines on young credit
+    typology: synthetic_identity
+    condition: "au_tradelines >= 3 and oldest_tradeline_months < 60"
+    action: REVIEW
+    strategies: [champion, challenger]
+
+  - id: SYN-003
+    name: SSN issued in adulthood + new phone and email
+    typology: synthetic_identity
+    condition: "ssn_issue_age >= 18 and phone_tenure_days < 180 and email_tenure_days < 180 and credit_file_type != 'no_file'"
+    action: REVIEW
+    strategies: [challenger]
+
+  - id: SYN-004
+    name: Phone shared across multiple identities
+    typology: synthetic_identity
+    condition: "phone_shared_count >= 2"
+    action: REVIEW
+    strategies: [challenger]
+
+  # ---------------- Straw buyer -----------------------------------------
+  - id: STR-001
+    name: Long distance to dealer + high-value vehicle
+    typology: straw_buyer
+    condition: "dist_to_dealer_km > 250 and vehicle_price > 45000"
+    action: REVIEW
+    strategies: [challenger]
+
+  - id: STR-002
+    name: Vehicle price disproportionate to income, young buyer
+    typology: straw_buyer
+    condition: "vehicle_to_income > 0.9 and applicant_age < 26"
+    action: REVIEW
+    strategies: [champion, challenger]
+
+  # ---------------- Income misrepresentation ----------------------------
+  - id: INC-001
+    name: Stated income > 1.35x bank-verified income
+    typology: income_misrep
+    condition: "income_ratio > 1.35"
+    action: STIP
+    strategies: [challenger]
+
+  - id: INC-002
+    name: Paystub forensic edit detected
+    typology: income_misrep
+    condition: "paystub_edit_flag == 1"
+    action: REVIEW
+    strategies: [champion, challenger]
+
+  - id: INC-003
+    name: Dealer re-submitted with changed income/employer
+    typology: income_misrep
+    condition: "dealer_rapid_resubmits >= 2 and employer_verified == 0"
+    action: REVIEW
+    strategies: [challenger]
+
+  - id: INC-004
+    name: Employer unverifiable and stated PTI near cap
+    typology: income_misrep
+    condition: "employer_verified == 0 and pti > 0.15 and bank_data_linked == 0"
+    action: STIP
+    strategies: [champion, challenger]
+
+  # ---------------- Velocity --------------------------------------------
+  - id: VEL-001
+    name: Device used on 3+ applications in 30 days
+    typology: application_fraud
+    condition: "device_apps_30d >= 3"
+    action: REVIEW
+    strategies: [champion, challenger]
+
+  - id: VEL-002
+    name: SSN on 3+ applications in 30 days
+    typology: synthetic_identity
+    condition: "ssn_apps_30d >= 3"
+    action: REVIEW
+    strategies: [challenger]
+
+# STIP effectiveness: share of fraud that abandons / is caught when a stip is
+# issued (e.g. mandatory bank-link), and share of good applicants who abandon.
+stip_assumptions:
+  fraud_capture_rate: 0.65
+  good_abandon_rate: 0.08

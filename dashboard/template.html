@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Underwriting Fraud Command Center — Auto Lending</title>
+<script>/*__CHARTJS__*/</script>
+<style>
+  :root{
+    --surface-0:#f6f5f2; --surface-1:#ffffff; --border:#e3e1da;
+    --text-primary:#1d1d1b; --text-secondary:#55544f; --text-muted:#86857e;
+    --grid:#ecebe6; --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+    --good:#0a7d32; --bad:#c62828; --warn:#a86400;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --surface-0:#121211; --surface-1:#1a1a19; --border:#2e2e2b;
+      --text-primary:#f0efec; --text-secondary:#c3c2b7; --text-muted:#8f8e86;
+      --grid:#2a2a27; --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+      --good:#4cc27a; --bad:#ef6b6b; --warn:#e0a33a; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--surface-0);color:var(--text-primary)}
+  header{padding:28px 32px 18px;border-bottom:1px solid var(--border);background:var(--surface-1)}
+  header h1{margin:0;font-size:22px;letter-spacing:-.01em}
+  header p{margin:4px 0 0;color:var(--text-secondary)}
+  nav{position:sticky;top:0;z-index:5;background:var(--surface-1);border-bottom:1px solid var(--border);padding:0 24px;display:flex;gap:4px;overflow-x:auto}
+  nav a{padding:12px 12px;color:var(--text-secondary);text-decoration:none;font-weight:500;white-space:nowrap;border-bottom:2px solid transparent}
+  nav a:hover{color:var(--text-primary);border-color:var(--s1)}
+  main{max-width:1320px;margin:0 auto;padding:24px}
+  section{margin-bottom:36px}
+  h2{font-size:17px;margin:0 0 4px} .sub{color:var(--text-secondary);margin:0 0 14px}
+  .grid{display:grid;gap:16px}
+  .g4{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(460px,1fr))}
+  .card{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+  .card h3{margin:0 0 2px;font-size:14px}
+  .card .note{color:var(--text-muted);font-size:12px;margin:0 0 10px}
+  .tile .label{color:var(--text-secondary);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .tile .value{font-size:30px;font-weight:650;letter-spacing:-.02em;margin:4px 0 2px;font-variant-numeric:tabular-nums}
+  .tile .delta{font-size:13px;color:var(--text-secondary)}
+  .up{color:var(--good)} .down{color:var(--bad)}
+  .chart{position:relative;height:280px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{padding:7px 8px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{white-space:normal;vertical-align:bottom;font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+  .scroll{overflow-x:auto}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid currentColor}
+  .ok{color:var(--good)} .no{color:var(--bad)} .mid{color:var(--warn)}
+  .callout{border-left:3px solid var(--s1);padding:10px 14px;background:var(--surface-1);border-radius:6px;margin:0 0 14px;color:var(--text-secondary)}
+  .callout b{color:var(--text-primary)}
+  footer{color:var(--text-muted);font-size:12px;text-align:center;padding:24px}
+  .legend-dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Underwriting Fraud Command Center</h1>
+  <p id="hdr"></p>
+</header>
+<nav>
+  <a href="#exec">Executive summary</a><a href="#trends">KPI trends</a><a href="#typology">Typologies</a>
+  <a href="#strategy">Strategy &amp; cutoffs</a><a href="#rules">Rules</a><a href="#vendors">Vendors</a>
+  <a href="#dealers">Dealers</a><a href="#forecast">Loss forecast</a><a href="#model">Model health</a>
+</nav>
+<main>
+
+<section id="exec">
+  <h2>Executive summary</h2>
+  <p class="sub">Challenger (rules + calibrated ML) against champion (legacy rules), out-of-time validation window</p>
+  <div class="callout" id="headline"></div>
+  <div class="grid g4" id="tiles"></div>
+</section>
+
+<section id="trends">
+  <h2>Monthly KPI trends</h2>
+  <p class="sub">Champion = production. Challenger = 12-month shadow backtest; each month is scored by a model that never saw it.</p>
+  <div class="grid g2">
+    <div class="card"><h3>Fraud capture rate ($ exposure stopped)</h3><p class="note">Target ≥ 85%</p><div class="chart"><canvas id="cCapture"></canvas></div></div>
+    <div class="card"><h3>Attempted fraud rate</h3><p class="note">Share of applications confirmed as fraud</p><div class="chart"><canvas id="cFraudRate"></canvas></div></div>
+    <div class="card"><h3>Auto-approval rate</h3><p class="note">Dealer experience floor ≥ 80%</p><div class="chart"><canvas id="cAuto"></canvas></div></div>
+    <div class="card"><h3>Manual review queue volume</h3><p class="note">Dashed line = analyst capacity per month</p><div class="chart"><canvas id="cQueue"></canvas></div></div>
+    <div class="card"><h3>False-positive rate</h3><p class="note">Good applicants not auto-approved; target ≤ 15%</p><div class="chart"><canvas id="cFpr"></canvas></div></div>
+    <div class="card"><h3>Residual fraud loss (bps of originations)</h3><p class="note">Target ≤ 60 bps</p><div class="chart"><canvas id="cBps"></canvas></div></div>
+  </div>
+</section>
+
+<section id="typology">
+  <h2>Fraud typologies</h2>
+  <p class="sub">Capture rate by typology, OOT window</p>
+  <div class="grid g2">
+    <div class="card"><h3>Capture rate by typology</h3><p class="note">Share of fraud applications stopped</p><div class="chart"><canvas id="cTyp"></canvas></div></div>
+    <div class="card"><h3>Typology detail</h3><p class="note">Loss exposure is the funded loss if the fraud had gone through undetected</p><div class="scroll"><table id="tTyp"></table></div></div>
+  </div>
+</section>
+
+<section id="strategy">
+  <h2>Strategy economics &amp; cutoff optimisation</h2>
+  <p class="sub">Grid search over ML review/decline cutoffs. Cost = fraud loss + good-customer friction + review cost. Constraints: review capacity and ≥ 82% auto-approval.</p>
+  <div class="grid g2">
+    <div class="card"><h3>Champion vs challenger</h3><p class="note">OOT window</p><div class="scroll"><table id="tCvc"></table></div></div>
+    <div class="card"><h3>Cutoff frontier: review volume vs total cost</h3><p class="note">Each dot is one cutoff pair. Hollow dots are infeasible; the ringed dot is the optimum.</p><div class="chart"><canvas id="cGrid"></canvas></div></div>
+  </div>
+</section>
+
+<section id="rules">
+  <h2>Decision rule performance</h2>
+  <p class="sub">Challenger rule set, OOT window, ranked by fraud loss covered. Use this view to retire, tune or promote rules.</p>
+  <div class="card scroll"><table id="tRules"></table></div>
+</section>
+
+<section id="vendors">
+  <h2>Third-party data providers</h2>
+  <p class="sub">Incremental value is measured by leave-one-vendor-out retraining at a fixed 5% review rate</p>
+  <div class="card scroll" style="margin-bottom:16px"><table id="tVendors"></table></div>
+  <div class="grid g2">
+    <div class="card"><h3>Emerging vendor POC: Vendor E (consortium identity graph)</h3><p class="note" id="pocNote"></p><div class="scroll"><table id="tPoc"></table></div><p id="pocRec" style="margin:12px 0 0"></p></div>
+    <div class="card"><h3>Vendor signal overlap on confirmed fraud</h3><p class="note">Row vendor's fraud flags that the column vendor also flags. High overlap means redundant spend.</p><div class="scroll"><table id="tOverlap"></table></div></div>
+  </div>
+</section>
+
+<section id="dealers">
+  <h2>Dealer risk watchlist</h2>
+  <p class="sub">Binomial z-score of dealer fraud rate against the portfolio. This is the main lead source for straw-buyer and application-fraud rings.</p>
+  <div class="card scroll"><table id="tDealers"></table></div>
+</section>
+
+<section id="forecast">
+  <h2>Underwriting fraud loss forecast</h2>
+  <p class="sub">Log-linear trend on fraud exposure, run under base, adverse and severe scenarios, with the capture rate of each strategy applied</p>
+  <div class="grid g2">
+    <div class="card"><h3>Net fraud loss per month (base scenario)</h3><p class="note">Solid = actual history (champion). Dashed = forecast.</p><div class="chart"><canvas id="cFc"></canvas></div></div>
+    <div class="card"><h3>6-month cumulative net loss by scenario</h3><p class="note">Champion vs challenger</p><div class="chart"><canvas id="cScen"></canvas></div></div>
+  </div>
+</section>
+
+<section id="model">
+  <h2>Model health (MRM)</h2>
+  <p class="sub">Gradient-boosted fraud model with isotonic calibration, validated out of time</p>
+  <div class="grid g2">
+    <div class="card"><h3>Validation metrics</h3><p class="note" id="psiNote"></p><div class="scroll"><table id="tMetrics"></table></div></div>
+    <div class="card"><h3>Top drivers (permutation importance, AUC drop)</h3><p class="note">OOT sample</p><div class="chart" style="height:320px"><canvas id="cImp"></canvas></div></div>
+    <div class="card"><h3>Calibration by score decile</h3><p class="note">Predicted vs observed fraud rate (OOT)</p><div class="chart"><canvas id="cCal"></canvas></div></div>
+  </div>
+</section>
+</main>
+<footer>Prototype built on fully synthetic data, with no real consumer information. Vendor names are fictional archetypes. Reproduce with <code>python run_pipeline.py</code>.</footer>
+
+<script>
+const D = /*__DATA__*/null;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C = {ch: css('--s1'), cp: css('--s2'), s3: css('--s3'), s4: css('--s4'), grid: css('--grid'),
+           text: css('--text-secondary'), muted: css('--text-muted'), good: css('--good'), bad: css('--bad')};
+Chart.defaults.color = C.text; Chart.defaults.font.family = 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
+Chart.defaults.plugins.legend.labels.boxWidth = 10; Chart.defaults.plugins.legend.labels.boxHeight = 10;
+Chart.defaults.interaction = {mode: 'index', intersect: false};
+const pct = (v, d=1) => v == null ? 'n/a' : (100*v).toFixed(d) + '%';
+const usd = v => v == null ? 'n/a' : Math.abs(v) >= 1e9 ? '$' + (v/1e9).toFixed(2) + 'B' : Math.abs(v) >= 1e6 ? '$' + (v/1e6).toFixed(2) + 'M' : Math.abs(v) >= 1e3 ? '$' + Math.round(v/1e3) + 'K' : '$' + Math.round(v);
+const num = v => v == null ? 'n/a' : Math.round(v).toLocaleString();
+const title = s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+const scales = (fmt) => ({x: {grid: {display: false}}, y: {grid: {color: C.grid}, border: {display: false}, ticks: {callback: fmt}}});
+function table(id, cols, rows){
+  const t = document.getElementById(id);
+  t.innerHTML = '<thead><tr>' + cols.map(c => `<th>${c[0]}</th>`).join('') + '</tr></thead><tbody>' +
+    rows.map(r => '<tr>' + cols.map(c => `<td>${c[1](r)}</td>`).join('') + '</tr>').join('') + '</tbody>';
+}
+function line(id, key, fmt, extra, single){
+  const months = [...new Set(D.monthly.map(r => r.app_month))];
+  const get = s => months.map(m => D.monthly.find(r => r.app_month === m && r.strategy === s)[key]);
+  const ds = single ? [{label: single, data: get('Champion'), borderColor: C.ch, backgroundColor: C.ch, borderWidth: 2, pointRadius: 3, tension: .25}] : [
+    {label: 'Challenger (shadow)', data: get('Challenger'), borderColor: C.ch, backgroundColor: C.ch, borderWidth: 2, pointRadius: 3, tension: .25},
+    {label: 'Champion (production)', data: get('Champion'), borderColor: C.cp, backgroundColor: C.cp, borderWidth: 2, pointRadius: 3, tension: .25},
+  ];
+  if (extra) ds.push(...extra(months));
+  new Chart(document.getElementById(id), {type: 'line', data: {labels: months, datasets: ds},
+    options: {maintainAspectRatio: false, scales: scales(fmt), plugins: {legend: {display: !single}, tooltip: {callbacks: {label: c => `${c.dataset.label}: ${fmt(c.parsed.y)}`}}}}});
+}
+
+// ---------- header & tiles
+const cp = D.cvc[0], ch = D.cvc[1], oot = D.model_metrics.find(m => m.sample === 'oot');
+document.getElementById('hdr').textContent =
+  `Report month ${D.report_month} · Policy ${D.policy_version} · ${D.portfolio.applications.toLocaleString()} synthetic applications · ${usd(D.portfolio.originations_usd)} requested originations`;
+document.getElementById('headline').innerHTML =
+  `The challenger strategy stops <b>${pct(ch.fraud_capture_rate_usd)}</b> of fraud dollar exposure, against ${pct(cp.fraud_capture_rate_usd)} for the legacy rules. ` +
+  `Net fraud loss falls from ${cp.fraud_loss_bps.toFixed(0)} to <b>${ch.fraud_loss_bps.toFixed(0)} bps</b>. ` +
+  `Auto-approval stays at ${pct(ch.auto_approval_rate)} and reviews fit capacity (${num(ch.reviews_per_month)} of ${num(D.review_capacity_per_month)} per month). ` +
+  `<b>Recommendation:</b> promote to production with a 10% champion holdout.`;
+const tiles = [
+  ['Fraud capture ($)', pct(ch.fraud_capture_rate_usd), ch.fraud_capture_rate_usd - cp.fraud_capture_rate_usd, true],
+  ['Residual loss (bps)', ch.fraud_loss_bps.toFixed(0), (ch.fraud_loss_bps - cp.fraud_loss_bps)/1e4, false, ' bps'],
+  ['Auto-approval rate', pct(ch.auto_approval_rate), ch.auto_approval_rate - cp.auto_approval_rate, true],
+  ['Reviews / month', num(ch.reviews_per_month), null, null, null, `capacity ${num(D.review_capacity_per_month)}`],
+  ['False-positive rate', pct(ch.false_positive_rate), ch.false_positive_rate - cp.false_positive_rate, false],
+  ['Loss prevented (OOT, 2 mo)', usd(ch.loss_prevented_usd), null, null, null, `+${usd(ch.loss_prevented_usd - cp.loss_prevented_usd)} vs champion`],
+  ['Model AUC (OOT)', oot.auc.toFixed(3), null, null, null, `KS ${oot.ks.toFixed(3)} · PSI ${D.stability.score_psi_train_vs_oot.toFixed(3)}`],
+  ['Vendor E POC net benefit', usd(D.poc.net_benefit_annual), null, null, null, 'per year, annualised'],
+];
+document.getElementById('tiles').innerHTML = tiles.map(([l, v, d, upGood, unit, note]) => {
+  let delta = note || '';
+  if (d != null) {
+    const good = upGood ? d > 0 : d < 0;
+    const txt = unit ? `${d > 0 ? '+' : ''}${(d*1e4).toFixed(0)}${unit}` : `${d > 0 ? '+' : ''}${(d*100).toFixed(1)} pts`;
+    delta = `<span class="${good ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${txt}</span> vs champion`;
+  }
+  return `<div class="card tile"><div class="label">${l}</div><div class="value">${v}</div><div class="delta">${delta}</div></div>`;
+}).join('');
+
+// ---------- trends
+line('cCapture', 'dollar_capture_rate', v => pct(v, 0));
+line('cFraudRate', 'fraud_rate', v => pct(v, 1), null, 'Attempted fraud rate');
+line('cAuto', 'auto_approval_rate', v => pct(v, 0));
+line('cFpr', 'false_positive_rate', v => pct(v, 0));
+line('cBps', 'residual_loss_bps', v => v.toFixed(0));
+line('cQueue', 'review_volume', v => num(v), m => [{label: 'Capacity', data: m.map(() => D.review_capacity_per_month),
+  borderColor: C.muted, borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0}]);
+
+// ---------- typology
+const typs = [...new Set(D.typology.map(r => r.typology))];
+const tget = s => typs.map(t => D.typology.find(r => r.typology === t && r.strategy === s));
+new Chart(document.getElementById('cTyp'), {type: 'bar', data: {labels: typs.map(title), datasets: [
+  {label: 'Challenger', data: tget('Challenger').map(r => r.capture_rate), backgroundColor: C.ch, borderRadius: 4, borderSkipped: 'bottom', borderColor: css('--surface-1'), borderWidth: {left: 1, right: 1}},
+  {label: 'Champion', data: tget('Champion').map(r => r.capture_rate), backgroundColor: C.cp, borderRadius: 4, borderSkipped: 'bottom', borderColor: css('--surface-1'), borderWidth: {left: 1, right: 1}}]},
+  options: {maintainAspectRatio: false, scales: {...scales(v => pct(v, 0)), y: {...scales().y, max: 1, ticks: {callback: v => pct(v, 0)}}},
+    plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${pct(c.parsed.y)}`}}}}});
+table('tTyp', [['Typology', r => title(r.t)], ['Fraud apps', r => r.c.fraud_apps], ['Loss exposure', r => usd(r.c.loss_exposure_usd)],
+  ['Champion', r => pct(r.p.capture_rate)], ['Challenger', r => '<b>' + pct(r.c.capture_rate) + '</b>'],
+  ['$ prevented (chall.)', r => usd(r.c.loss_prevented_usd)]],
+  typs.map((t, i) => ({t, c: tget('Challenger')[i], p: tget('Champion')[i]})).sort((a, b) => b.c.loss_exposure_usd - a.c.loss_exposure_usd));
+
+// ---------- strategy
+const cvcRows = [['Auto-approval rate', 'auto_approval_rate', pct], ['STIP rate', 'stip_rate', pct], ['Manual review rate', 'manual_review_rate', pct],
+  ['Fraud decline rate', 'decline_rate', pct], ['Capture (count)', 'fraud_capture_rate_count', pct], ['Capture ($)', 'fraud_capture_rate_usd', pct],
+  ['False-positive rate', 'false_positive_rate', pct], ['Alerts per fraud', 'alert_to_fraud_ratio', v => v.toFixed(1)],
+  ['Residual fraud loss', 'residual_fraud_loss_usd', usd], ['Friction cost', 'friction_cost_usd', usd], ['Review cost', 'review_cost_usd', usd],
+  ['Total cost', 'total_cost_usd', usd], ['Net loss (bps)', 'fraud_loss_bps', v => v.toFixed(0)]];
+table('tCvc', [['Metric', r => r[0]], ['Champion', r => r[2](cp[r[1]])], ['Challenger', r => '<b>' + r[2](ch[r[1]]) + '</b>']], cvcRows);
+const best = D.grid_best[0];
+new Chart(document.getElementById('cGrid'), {type: 'scatter', data: {datasets: [
+  {label: 'Feasible', data: D.grid.filter(g => g.feasible).map(g => ({x: g.reviews_per_month, y: g.total_cost_usd, g})), backgroundColor: C.ch, pointRadius: 5},
+  {label: 'Infeasible (auto-approval < 82%)', data: D.grid.filter(g => !g.feasible).map(g => ({x: g.reviews_per_month, y: g.total_cost_usd, g})), backgroundColor: 'transparent', borderColor: C.muted, pointRadius: 5, borderWidth: 1.5},
+  {label: 'Optimum', data: [{x: best.reviews_per_month, y: best.total_cost_usd, g: best}], backgroundColor: C.ch, borderColor: css('--text-primary'), borderWidth: 2.5, pointRadius: 9}]},
+  options: {maintainAspectRatio: false, interaction: {mode: 'nearest', intersect: true},
+    scales: {x: {title: {display: true, text: 'Manual reviews per month'}, grid: {color: C.grid}}, y: {title: {display: true, text: 'Total cost (OOT)'}, grid: {color: C.grid}, ticks: {callback: usd}}},
+    plugins: {tooltip: {callbacks: {label: c => { const g = c.raw.g; return [`Review ≥ ${g.review_cutoff}, decline ≥ ${g.decline_cutoff}`, `Cost ${usd(g.total_cost_usd)}`, `Auto-approve ${pct(g.auto_approval_rate)} · Capture ${pct(g.fraud_capture_rate_usd)}`]; }}}}}});
+
+// ---------- rules
+table('tRules', [['Rule', r => `<b>${r.rule_id}</b> ${r.name}`], ['Typology', r => title(r.typology)], ['Action', r => r.action],
+  ['Hits', r => num(r.hits)], ['Hit rate', r => pct(r.hit_rate, 2)], ['Precision', r => pct(r.precision)], ['Fraud capture', r => pct(r.fraud_capture)],
+  ['FP per TP', r => r.false_positive_ratio == null ? 'n/a' : r.false_positive_ratio.toFixed(1)], ['Loss covered', r => usd(r.loss_covered_usd)],
+  ['Signal', r => r.precision >= .3 ? '<span class="pill ok">Keep</span>' : r.precision >= .12 ? '<span class="pill mid">Tune</span>' : '<span class="pill no">Retire / tier</span>']], D.rules);
+
+// ---------- vendors
+const recCls = r => r.startsWith('Renew') ? 'ok' : r.startsWith('Renegotiate') ? 'mid' : 'no';
+table('tVendors', [['Vendor', r => `<b>${r.vendor}</b><br><span style="color:var(--text-muted)">${r.category}</span>`],
+  ['Standalone AUC', r => r.standalone_auc.toFixed(3)], ['Incr. AUC', r => (r.incremental_auc >= 0 ? '+' : '') + r.incremental_auc.toFixed(4)],
+  ['Incr. $ prevented / yr', r => usd(r.incremental_loss_prevented_annual)], ['Annual cost', r => usd(r.annual_cost)],
+  ['Net benefit', r => usd(r.net_benefit_annual)], ['ROI', r => r.roi.toFixed(1) + 'x'],
+  ['p95 latency', r => r.latency_ms_p95 + ' ms'], ['Uptime', r => pct(r.uptime, 2)], ['Hit rate', r => pct(r.hit_rate)],
+  ['SLA breaches', r => r.sla_breaches], ['Recommendation', r => `<span class="pill ${recCls(r.recommendation)}">${r.recommendation}</span>`]], D.vendors);
+document.getElementById('pocNote').textContent = `Retro-scored on ${D.poc.poc_sample_size.toLocaleString()} applications, with a time-ordered test set of ${D.poc.test_size.toLocaleString()}`;
+table('tPoc', [['Metric', r => r[0]], ['Without E', r => r[1]], ['With E', r => '<b>' + r[2] + '</b>']], [
+  ['Model AUC', D.poc.auc_without.toFixed(3), D.poc.auc_with.toFixed(3)],
+  ['Capture @ 5% review', pct(D.poc.capture_without), pct(D.poc.capture_with)],
+  ...Object.entries(D.poc.by_typology).map(([t, v]) => [`Capture: ${title(t)}`, pct(v.capture_without), pct(v.capture_with)]),
+  ['Annual incremental $ prevented', '', usd(D.poc.incremental_loss_prevented_annual)], ['Annual cost', '', usd(D.poc.annual_cost)],
+  ['ROI', '', D.poc.roi.toFixed(1) + 'x']]);
+document.getElementById('pocRec').innerHTML = `<b>Recommendation:</b> ${D.poc.recommendation}`;
+const ov = D.overlap, vnames = Object.keys(ov[0]).filter(k => k !== 'vendor');
+table('tOverlap', [['Flagged by ↓ / also by →', r => r.vendor], ...vnames.map(v => [v, r => pct(r[v], 0)])], ov);
+
+// ---------- dealers
+const actCls = a => a.startsWith('Suspend') ? 'no' : a.startsWith('Enhanced') ? 'mid' : 'ok';
+table('tDealers', [['Dealer', r => '<b>' + r.dealer_id + '</b>'], ['State', r => r.state], ['Apps', r => num(r.apps)], ['Fraud', r => r.fraud],
+  ['Fraud rate', r => pct(r.fraud_rate)], ['Straw buyer', r => r.straw], ['App fraud', r => r.app_fraud], ['Median buyer dist.', r => Math.round(r.avg_dist_km) + ' km'],
+  ['Avg resubmits', r => r.resubmits.toFixed(2)], ['Exposure', r => usd(r.exposure_usd)], ['z-score', r => r.z_score.toFixed(1)],
+  ['Action', r => `<span class="pill ${actCls(r.action)}">${r.action}</span>`]], D.dealers);
+
+// ---------- forecast
+const histM = D.history.map(h => h.app_month);
+const cpM = D.monthly.filter(r => r.strategy === 'Champion');
+const fcB = D.forecast.filter(r => r.scenario === 'Base');
+const fM = [...new Set(fcB.map(r => r.month))];
+const lab = [...histM, ...fM];
+const pad = (arr, n) => Array(n).fill(null).concat(arr);
+const lastHist = cpM[cpM.length - 1].residual_loss_usd;
+const fs = s => fcB.filter(r => r.strategy === s).map(r => r.net_fraud_loss_usd);
+new Chart(document.getElementById('cFc'), {type: 'line', data: {labels: lab, datasets: [
+  {label: 'Actual (champion)', data: cpM.map(r => r.residual_loss_usd), borderColor: C.cp, backgroundColor: C.cp, borderWidth: 2, pointRadius: 2},
+  {label: 'Forecast: champion', data: pad([lastHist, ...fs('Champion')], histM.length - 1), borderColor: C.cp, backgroundColor: C.cp, borderDash: [6, 4], borderWidth: 2, pointRadius: 2},
+  {label: 'Forecast: challenger', data: pad([lastHist, ...fs('Challenger')], histM.length - 1), borderColor: C.ch, backgroundColor: C.ch, borderDash: [6, 4], borderWidth: 2, pointRadius: 2}]},
+  options: {maintainAspectRatio: false, scales: scales(usd), plugins: {tooltip: {callbacks: {label: c => c.parsed.y == null ? null : `${c.dataset.label}: ${usd(c.parsed.y)}`}}}}});
+const scen = ['Base', 'Adverse', 'Severe (fraud-ring surge)'];
+const ssum = (sc, st) => D.forecast.filter(r => r.scenario === sc && r.strategy === st).reduce((a, r) => a + r.net_fraud_loss_usd, 0);
+new Chart(document.getElementById('cScen'), {type: 'bar', data: {labels: scen, datasets: [
+  {label: 'Challenger', data: scen.map(s => ssum(s, 'Challenger')), backgroundColor: C.ch, borderRadius: 4, borderSkipped: 'bottom'},
+  {label: 'Champion', data: scen.map(s => ssum(s, 'Champion')), backgroundColor: C.cp, borderRadius: 4, borderSkipped: 'bottom'}]},
+  options: {maintainAspectRatio: false, scales: scales(usd), plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${usd(c.parsed.y)}`}}}}});
+
+// ---------- model
+document.getElementById('psiNote').textContent = `Score PSI, train vs OOT: ${D.stability.score_psi_train_vs_oot.toFixed(3)} (< 0.10 = stable)`;
+table('tMetrics', [['Sample', r => r.sample === 'oot' ? 'OOT' : title(r.sample)], ['N', r => num(r.n)], ['Fraud rate', r => pct(r.fraud_rate, 2)], ['AUC', r => r.auc.toFixed(3)],
+  ['PR-AUC', r => r.pr_auc.toFixed(3)], ['KS', r => r.ks.toFixed(3)], ['Capture @2%', r => pct(r.capture_at_2pct)], ['@5%', r => pct(r.capture_at_5pct)], ['@10%', r => pct(r.capture_at_10pct)]], D.model_metrics);
+const imp = D.importance.slice(0, 12);
+new Chart(document.getElementById('cImp'), {type: 'bar', data: {labels: imp.map(i => i.feature), datasets: [{label: 'AUC drop', data: imp.map(i => i.auc_drop), backgroundColor: C.ch, borderRadius: 4, borderSkipped: 'left'}]},
+  options: {indexAxis: 'y', maintainAspectRatio: false, plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => `AUC drop: ${c.parsed.x.toFixed(4)}`}}},
+    scales: {x: {grid: {color: C.grid}}, y: {grid: {display: false}}}}});
+new Chart(document.getElementById('cCal'), {type: 'line', data: {labels: D.calibration.map(c => 'D' + c.decile), datasets: [
+  {label: 'Observed fraud rate', data: D.calibration.map(c => c.fraud_rate), borderColor: C.ch, backgroundColor: C.ch, borderWidth: 2, pointRadius: 4},
+  {label: 'Avg predicted score', data: D.calibration.map(c => c.avg_score), borderColor: C.cp, backgroundColor: C.cp, borderWidth: 2, pointRadius: 4, borderDash: [5, 3]}]},
+  options: {maintainAspectRatio: false, scales: scales(v => pct(v, 0)), plugins: {tooltip: {callbacks: {label: c => `${c.dataset.label}: ${pct(c.parsed.y)}`}}}}});
+</script>
+</body>
+</html>
