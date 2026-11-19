@@ -4,6 +4,8 @@
 
 Built as a portfolio piece for the **Director, Fraud Analytics, Risk & Strategy (Auto Finance / Lending)** role, reporting to the CFO.
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/atlasse71/auto-fraud-risk-strategy?quickstart=1) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/atlasse71/auto-fraud-risk-strategy/blob/main/notebooks/quickstart.ipynb) [![CI](https://github.com/atlasse71/auto-fraud-risk-strategy/actions/workflows/ci.yml/badge.svg)](https://github.com/atlasse71/auto-fraud-risk-strategy/actions/workflows/ci.yml)
+
 **[▶ Live dashboard](https://atlasse71.github.io/auto-fraud-risk-strategy/)** · **[📄 Monthly CFO / Credit Committee report](reports/monthly_fraud_report_2026-10.md)** · **[📘 Strategy playbook](playbook/)**
 
 ![Dashboard preview](docs/assets/dashboard_preview.png)
@@ -70,6 +72,12 @@ Built as a portfolio piece for the **Director, Fraud Analytics, Risk & Strategy 
 
 ## Quick start
 
+**One click, nothing to install:**
+- **Codespaces** (button above): dependencies install automatically. In the terminal, run `python run_pipeline.py`, then `python -m http.server 8000 -d docs` to open the dashboard.
+- **Colab** (button above): *Runtime → Run all* runs the pipeline, shows the results, and includes a "change a cutoff and re-run" exercise.
+
+**Locally** (Python 3.10+):
+
 ```bash
 pip install -r requirements.txt
 python run_pipeline.py        # ~1 min: generates data, trains, scores, writes report + dashboard
@@ -88,6 +96,7 @@ open docs/index.html          # self-contained dashboard (works offline)
 | `reports/` | Monthly executive fraud report for the CFO and Credit Risk Committee |
 | `docs/index.html` | Interactive dashboard (published via GitHub Pages) |
 | `playbook/` | Typology control matrix, KPI framework, vendor governance, model governance, LOS integration, 90-day plan |
+| `notebooks/quickstart.ipynb` | Colab walkthrough: run, inspect results, tune a cutoff |
 | `tests/` | Unit and integration tests (data integrity, rule hierarchy, NaN safety, model performance, SQL execution) |
 
 ## Methodology notes
